@@ -1,0 +1,23 @@
+{
+  "start": "node socket.js",
+  "name": "whatsapp-nf",
+  "version": "1.0.3",
+  "description": "",
+  "main": "socket.js",
+  "keywords": [],
+  "author": "mosh",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "electron": "^25.3.0",
+    "express": "^4.18.2",
+    "ip": "^1.1.8",
+    "moment-timezone": "^0.5.43",
+    "path": "^0.12.7",
+    "qrcode-terminal": "^0.12.0",
+    "request": "^2.88.2",
+    "socket.io": "^4.7.2",
+    "uuid": "^9.0.0",
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js"
+  }
+}

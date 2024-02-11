@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whatsapp API</title>
+    <style>
+        body {
+            font-family: 'Open Sans', sans-serif;
+        }
+        #app {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            background-color: #f2f2f2;
+        }
+        h1 {
+            font-size: 24px;
+            margin: 0;
+        }
+        #qrcode {
+            max-width: 100%;
+        }
+        .logs, .received-messages, .messages-container {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0;
+        }
+        li {
+            margin: 5px 0;
+        }
+        a {
+            text-decoration: none;
+            color: blue;
+        }
+        /* סגנון לכרטיסי ההודעות */
+        .message-card {
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #fff;
+        }
+
+        /* סגנון לתמונות בהודעות */
+        .message-image {
+            max-width: 100%;
+            height: auto;
+        }
+
+        #senders-list {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 250px; /* גודל התפריט */
+            height: 100%; /* אפשרות להגדיר גובה מסוים */
+            background-color: #f9f9f9;
+            overflow-y: auto; /* תיאום עם תפריט ארוך יותר מהמסך */
+            padding: 20px;
+            box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+            z-index: 999; /* כדי שהתפריט יהיה מעל לתוכן הראשי */
+        }
+
+        #senders-list button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 5px;
+            text-align: left;
+            display: flex; /* שימוש ב-Flexbox */
+            justify-content: space-between; /* יישור בין התווית והטקסט של הכפתור */
+        }
+
+        /* סגנון עבור תווית ההודעות שלא נקראו */
+        .unread-messages {
+            color: red;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+    </style>    
+</head>
+<body>
+    <div id="senders-list"></div>
+    <div id="app" dir="rtl">
+        <h1>Whatsapp API</h1>
+        <!--img src="" alt="QR CODE" id="qrcode"-->
+        <!--h3>Logs:</h3-->
+        <!--ul class="logs"></ul-->
+        <ul class="received-messages"></ul>
+        
+        <div id="messages-container"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.1/jquery.min.js" integrity="sha512-aVKKRRi/Q/YV+4mjoKBsE4x3H+BkegoM/em46NNlCqNTmUYADjBbeNefNxYV7giUp0VxICtqdrbqU7iVaeZNXA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.2/socket.io.min.js" integrity="sha512-xzC4RSo+4m1clLhr0pQr6yFjO9bJ0py6+l65SBibI8/pSEU8U4iVZ7xm95WRq8PXw2MKv8SSR3QkqR2jciG5Ug==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+        // קוד חיבור והגדרת הסוקטים
+        const ip = "10.100.102.3";
+
+        $(document).ready(function() {
+            var socket = io.connect(`http://${ip}:4000`, { path: '/socket.io' })
+
+            socket.on('message', function(msg) {
+                $('.logs').append($('<li>').text(msg))
+            })
+
+            socket.on('qr', function(src) {
+                $('#qrcode').attr('src', src)
+            })
+
+            socket.on('ready', function(src) {
+                $('#qrcode').hide()
+            })
+
+            socket.on('authenticated', function(src) {
+                $('#qrcode').hide()
+            })
+
+            const messagesBySender = {};
+
+            socket.on('receivedMessage', function(message) {
+                if (!messagesBySender.hasOwnProperty(message.from)) {
+                    messagesBySender[message.from] = [];
+                }
+
+                message.read = false;
+
+                messagesBySender[message.from].push(message);
+
+                updateSendersList();
+            });
+
+            function hideUnreadMessages() {
+                const chatButtons = document.querySelectorAll('.chat-button');
+
+                chatButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        const buttonValue = this.value;
+                        const unreadMessagesSpan = document.querySelector(`button[value="${buttonValue}"] .unread-messages`);
+                        
+                        if (unreadMessagesSpan) {
+                            unreadMessagesSpan.remove();
+                        }
+                    });
+                });
+            }
+
+
+            function updateSendersList() {
+            const sendersList = document.getElementById('senders-list');
+            sendersList.innerHTML = '';
+
+                Object.keys(messagesBySender).forEach(sender => {
+                    const senderButton = document.createElement('button');
+                    senderButton.textContent = sender;
+                    
+                    // ספירת הודעות שלא נקראו בצאט והוספת התווית
+                    const unreadMessagesCount = countUnreadMessages(messagesBySender[sender]);
+                    if (unreadMessagesCount > 0) {
+                        const unreadMessagesSpan = document.createElement('span');
+                        unreadMessagesSpan.classList.add('unread-messages');
+                        unreadMessagesSpan.textContent = `(${unreadMessagesCount} לא נקראו)`;
+                        senderButton.appendChild(unreadMessagesSpan);
+                    }
+
+                    senderButton.addEventListener('click', function() {
+                        displayMessagesBySender(sender);
+                        hideUnreadMessages();
+                    });
+                    sendersList.appendChild(senderButton);
+                });
+            }
+            // פונקציה לספירת הודעות שלא נקראו בצאט
+            function countUnreadMessages(messages) {
+                // בדיקת הודעות שלא נקראו בצאט
+                let unreadCount = 0;
+                messages.forEach(message => {
+                    if (!message.read) {
+                        unreadCount++;
+                    }
+                });
+
+                return unreadCount;
+            }
+
+            function displayMessagesBySender(sender) {
+                const senderMessages = messagesBySender[sender];
+                const messagesContainer = document.getElementById('messages-container');
+                messagesContainer.innerHTML = '';
+
+                senderMessages.forEach(message => {
+                    message.read = true; // סימון כי ההודעה נקראה
+                    const messageCard = document.createElement('div');
+                    messageCard.classList.add('message-card');
+                    messageCard.innerHTML = `<h1 class="time">${message.timestamp}</h1>${message.from}: </br>${message.body}`;
+
+                    if (message.file) {
+                        const fileExtension = message.file.split('.').pop().toLowerCase();
+
+                        if (fileExtension === 'jpg' || fileExtension === 'png' || fileExtension === 'gif') {
+                            const image = document.createElement('img');
+                            image.src = `http://${ip}:4000/files/${message.file}`;
+                            image.alt = message.file;
+                            image.classList.add('message-image');
+                            messageCard.appendChild(image);
+                        } else if (fileExtension === 'mp4' || fileExtension === 'avi' || fileExtension === 'mov') {
+                            const video = document.createElement('video');
+                            video.controls = true;
+                            video.innerHTML = `<source src="http://${ip}:4000/files/${message.file}" type="video/mp4">`;
+                            messageCard.appendChild(video);
+                        } else {
+                            const fileLink = document.createElement('a');
+                            fileLink.href = `http://${ip}:4000/files/${message.file}`;
+                            fileLink.target = 'file';
+                            fileLink.textContent = message.file;
+                            messageCard.appendChild(fileLink);
+                        }
+                    }
+
+                    messagesContainer.appendChild(messageCard);
+                });
+                resetUnreadCount(); // איפוס ספירת ההודעות שלא נקראו
+
+            }
+
+            updateSendersList();
+        });
+    </script>
+</body>
+</html>
